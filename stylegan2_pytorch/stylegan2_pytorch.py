@@ -299,6 +299,9 @@ def slerp(val, low, high):
 def gen_hinge_loss(fake, real):
     return fake.mean()
 
+def wasserstein_loss(fake, real):
+    return real.mean() - fake.mean()
+
 def hinge_loss(real, fake):
     return (F.relu(1 + real) + F.relu(1 - fake)).mean()
 
@@ -793,6 +796,7 @@ class Trainer():
         top_k_training = False,
         generator_top_k_gamma = 0.99,
         generator_top_k_frac = 0.5,
+        wasserstein_loss = True,
         dual_contrast_loss = False,
         dataset_aug_prob = 0.,
         calculate_fid_every = None,
@@ -881,6 +885,7 @@ class Trainer():
         self.generator_top_k_frac = generator_top_k_frac
 
         self.dual_contrast_loss = dual_contrast_loss
+        self.wasserstein_loss = wasserstein_loss
 
         assert not (is_ddp and cl_reg), 'Contrastive loss regularization does not work well with multi GPUs yet'
         self.is_ddp = is_ddp
@@ -1006,8 +1011,11 @@ class Trainer():
             self.GAN.D_opt.step()
 
         # setup losses
-
-        if not self.dual_contrast_loss:
+        if self.wasserstein_loss:
+            D_loss_fn = wasserstein_loss
+            G_loss_fn = gen_hinge_loss
+            G_requires_reals = False
+        elif not self.dual_contrast_loss:
             D_loss_fn = hinge_loss
             G_loss_fn = gen_hinge_loss
             G_requires_reals = False
