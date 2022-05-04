@@ -1,3 +1,14 @@
+## TO RUN
+
+python3.6 -m venv ./venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install Cython
+pip install stylegan2_pytorch
+mkdir data
+(then create symbolic link)
+stylegan2_pytorch --data ./data/ffhq --name WGANs_ffhq
+
 ## Simple StyleGan2 for Pytorch
 [![PyPI version](https://badge.fury.io/py/stylegan2-pytorch.svg)](https://badge.fury.io/py/stylegan2-pytorch)
 
