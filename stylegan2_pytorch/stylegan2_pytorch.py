@@ -300,7 +300,7 @@ def gen_hinge_loss(fake, real):
     return fake.mean()
 
 def wasserstein_loss(fake, real):
-    return real.mean() - fake.mean()
+    return - (real.mean() - fake.mean())
 
 def hinge_loss(real, fake):
     return (F.relu(1 + real) + F.relu(1 - fake)).mean()
@@ -316,8 +316,6 @@ def dual_contrastive_loss(real_logits, fake_logits):
         return F.cross_entropy(t, torch.zeros(t1.shape[0], device = device, dtype = torch.long))
 
     return loss_half(real_logits, fake_logits) + loss_half(-fake_logits, -real_logits)
-
-# dataset
 
 def convert_rgb_to_transparent(image):
     if image.mode != 'RGBA':
@@ -688,6 +686,44 @@ class Discriminator(nn.Module):
         x = self.flatten(x)
         x = self.to_logit(x)
         return x.squeeze(), quantize_loss
+    
+    def return_embedding(self, x):
+        b, *_ = x.shape
+
+        quantize_loss = torch.zeros(1).to(x)
+
+        for (block, attn_block, q_block) in zip(self.blocks, self.attn_blocks, self.quantize_blocks):
+            x = block(x)
+
+            if exists(attn_block):
+                x = attn_block(x)
+
+            if exists(q_block):
+                x, loss = q_block(x)
+                quantize_loss += loss
+
+        x = self.final_conv(x)
+        x = self.flatten(x)
+        return x.squeeze()
+    
+    
+    def return_embedding_before_final_conv(self, x):
+        b, *_ = x.shape
+
+        quantize_loss = torch.zeros(1).to(x)
+
+        for (block, attn_block, q_block) in zip(self.blocks, self.attn_blocks, self.quantize_blocks):
+            x = block(x)
+
+            if exists(attn_block):
+                x = attn_block(x)
+
+            if exists(q_block):
+                x, loss = q_block(x)
+                quantize_loss += loss
+
+        x = self.flatten(x)
+        return x.squeeze()
 
 class StyleGAN2(nn.Module):
     def __init__(self, image_size, latent_dim = 512, fmap_max = 512, style_depth = 8, network_capacity = 16, transparent = False, fp16 = False, cl_reg = False, steps = 1, lr = 1e-4, ttur_mult = 2, fq_layers = [], fq_dict_size = 256, attn_layers = [], no_const = False, lr_mlp = 0.1, rank = 0):
@@ -1061,7 +1097,7 @@ class Trainer():
                 disc_loss = disc_loss + quantize_loss
 
             if apply_gradient_penalty:
-                gp = gradient_penalty(image_batch, real_output)
+                gp = gradient_penalty(image_batch, real_output, weight=15)
                 self.last_gp_loss = gp.clone().detach().item()
                 self.track(self.last_gp_loss, 'GP')
                 disc_loss = disc_loss + gp
